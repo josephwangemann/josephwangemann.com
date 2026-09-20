@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { titleRevealDuration } from '../constants/animation'
+import type { FoodPulse } from '../hooks/useSnakeGame'
+import { useTitlePhysics } from '../hooks/useTitlePhysics'
 
 const salutation = 'Hi!'
 const introduction = 'Joseph Wangemann here.'
@@ -11,8 +13,27 @@ const signalCandidates = [
     .flatMap((character, index) => (character === ' ' ? [] : [`introduction-${index}`])),
 ]
 
-export function Hero() {
+export function Hero({ foodPulse }: { foodPulse: FoodPulse | null }) {
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  useTitlePhysics(titleRef)
   const [signalCharacter, setSignalCharacter] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!foodPulse || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const animations: Animation[] = []
+    titleRef.current?.querySelectorAll<HTMLElement>('.title-reveal-character').forEach((letter) => {
+      const bounds = letter.getBoundingClientRect()
+      const distance = Math.hypot(bounds.left + bounds.width / 2 - foodPulse.x, bounds.top + bounds.height / 2 - foodPulse.y)
+      const strength = Math.max(0, 1 - distance / 360)
+      if (!strength) return
+      animations.push(letter.animate([
+        { color: '#f5f5f5', textShadow: '0 0 0 transparent' },
+        { color: `rgb(255, ${245 - 100 * strength}, ${245 - 70 * strength})`, textShadow: `0 0 0.45em rgba(255, 79, 123, ${strength * 0.65})`, offset: 0.35 },
+        { color: '#f5f5f5', textShadow: '0 0 0 transparent' },
+      ], { duration: 550, delay: Math.max(0, distance / foodPulse.reach * 1100 - (performance.now() - foodPulse.createdAt)), easing: 'ease-out' }))
+    })
+    return () => animations.forEach((animation) => animation.cancel())
+  }, [foodPulse])
 
   useEffect(() => {
     let nextSignalTimer: number
@@ -39,6 +60,7 @@ export function Hero() {
 
   return (
     <h1
+      ref={titleRef}
       className="relative z-10 m-0 text-center font-[Anta,sans-serif] text-[clamp(2rem,7vw,5rem)] font-normal leading-[1.1] tracking-[-0.04em] text-neutral-100"
       aria-label={greeting}
     >

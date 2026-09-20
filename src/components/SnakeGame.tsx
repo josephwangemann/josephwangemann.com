@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useSnakeGame } from '../hooks/useSnakeGame'
+import { useSnakeGame, type FoodPulse } from '../hooks/useSnakeGame'
 import { SnakeControlsHint } from './SnakeControlsHint'
 import { GameOverControls } from './GameOverControls'
 
-type SnakeGameProps = { gameStartDelay: number; isReady: boolean }
+type SnakeGameProps = { gameStartDelay: number; isReady: boolean; onFoodEaten: (pulse: FoodPulse) => void }
 
-export function SnakeGame({ gameStartDelay, isReady }: SnakeGameProps) {
+export function SnakeGame({ gameStartDelay, isReady, onFoodEaten }: SnakeGameProps) {
   const [isEntering, setIsEntering] = useState(false)
-  const game = useSnakeGame(isReady, gameStartDelay)
+  const game = useSnakeGame(isReady, gameStartDelay, onFoodEaten)
 
   useEffect(() => {
     if (!isReady) return
@@ -50,9 +50,16 @@ export function SnakeGame({ gameStartDelay, isReady }: SnakeGameProps) {
             className="size-full"
             aria-label="Snake game. Use arrow keys or swipe to control the snake."
           />
+          <canvas
+            ref={game.reactionsRef}
+            aria-hidden="true"
+            className="snake-reactions pointer-events-none absolute inset-0 size-full"
+          />
           <div className="absolute top-5 left-5 z-10 font-['Press_Start_2P',monospace] text-[0.55rem] leading-relaxed text-neutral-400 drop-shadow-md">
-            <span className="block">High Score</span>
+            <span ref={game.highScoreLabelRef} className="block">High Score</span>
             <span className="text-[0.9rem] text-neutral-200">{game.highScore}</span>
+            <span className="mt-3 block">Score</span>
+            <span className="text-[0.9rem] text-neutral-200">{game.score}</span>
           </div>
           {game.showControlsHint && <SnakeControlsHint isMobile={game.isMobile} />}
         </div>
