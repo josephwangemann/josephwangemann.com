@@ -28,7 +28,13 @@ export function Hero({ foodPulse }: { foodPulse: FoodPulse | null }) {
       if (!strength) return
       animations.push(letter.animate([
         { color: '#f5f5f5', textShadow: '0 0 0 transparent' },
-        { color: `rgb(255, ${245 - 100 * strength}, ${245 - 70 * strength})`, textShadow: `0 0 0.45em rgba(255, 79, 123, ${strength * 0.65})`, offset: 0.35 },
+        {
+          color: foodPulse.isMidnight
+            ? `rgb(255, ${245 - 40 * strength}, ${245 - 133 * strength})`
+            : `rgb(255, ${245 - 100 * strength}, ${245 - 70 * strength})`,
+          textShadow: `0 0 0.45em rgba(${foodPulse.isMidnight ? '255, 205, 112' : '255, 79, 123'}, ${strength * 0.65})`,
+          offset: 0.35,
+        },
         { color: '#f5f5f5', textShadow: '0 0 0 transparent' },
       ], { duration: 550, delay: Math.max(0, distance / foodPulse.reach * 1100 - (performance.now() - foodPulse.createdAt)), easing: 'ease-out' }))
     })

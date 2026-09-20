@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type TouchEvent } from 'react'
 
 const initialBoardSize = { height: 18, width: 28 }
 const mobileMediaQuery = '(max-width: 767px)'
+const midnightScore = 5
 
 type Position = { x: number; y: number }
 type Direction = { x: number; y: number }
@@ -14,7 +15,7 @@ type Particle = {
   y: number
 }
 type TrailSegment = Position & { createdAt: number }
-export type FoodPulse = { x: number; y: number; reach: number; createdAt: number }
+export type FoodPulse = { x: number; y: number; reach: number; createdAt: number; isMidnight: boolean }
 type Game = {
   boardSize: BoardSize
   direction: Direction
@@ -101,6 +102,7 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
   if (!canvas || !context) return
 
   const animationTime = game.stoppedAt ?? time
+  const isMidnight = game.score >= midnightScore
 
   context.clearRect(0, 0, game.boardSize.width, game.boardSize.height)
   context.strokeStyle = 'rgba(112, 183, 245, 0.08)'
@@ -122,7 +124,7 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
 
   game.trail.forEach((segment) => {
     const opacity = Math.max(0, 1 - (animationTime - segment.createdAt) / trailDuration)
-    context.fillStyle = `rgba(116, 201, 0, ${opacity * 0.22})`
+    context.fillStyle = `rgba(${isMidnight ? '105, 225, 242' : '116, 201, 0'}, ${opacity * 0.22})`
     context.fillRect(segment.x + 0.2, segment.y + 0.2, 0.6, 0.6)
   })
 
@@ -130,7 +132,7 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
     const age = animationTime - particle.createdAt
     const opacity = Math.max(0, 1 - age / particleDuration)
     const size = 0.08 + opacity * 0.08
-    context.fillStyle = `rgba(255, 112, 145, ${opacity})`
+    context.fillStyle = `rgba(${isMidnight ? '255, 205, 112' : '255, 112, 145'}, ${opacity})`
     context.fillRect(
       particle.x + particle.velocityX * age - size / 2,
       particle.y + particle.velocityY * age - size / 2,
@@ -139,7 +141,7 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
     )
   })
 
-  context.fillStyle = '#ff4f7b'
+  context.fillStyle = isMidnight ? '#ffcd70' : '#ff4f7b'
   const foodSize = 0.58 + Math.sin(animationTime / 150) * 0.22
   context.fillRect(
     game.food.x + (1 - foodSize) / 2,
@@ -149,7 +151,9 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
   )
 
   game.snake.forEach((segment, index) => {
-    context.fillStyle = index === 0 ? '#d9ff7a' : '#74c900'
+    context.fillStyle = isMidnight
+      ? index === 0 ? '#d9fbff' : '#69e1f2'
+      : index === 0 ? '#d9ff7a' : '#74c900'
     context.fillRect(segment.x + 0.12, segment.y + 0.12, 0.76, 0.76)
   })
 }
@@ -169,6 +173,7 @@ function drawReactions(canvas: HTMLCanvasElement | null, game: Game, time: numbe
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
   const now = game.stoppedAt ?? time
   const reach = Math.hypot(width, height)
+  const foodColor = game.score >= midnightScore ? '255, 205, 112' : '255, 79, 123'
 
   for (const pulse of game.foodPulses) {
     const progress = (now - pulse.createdAt) / 1100
@@ -177,9 +182,9 @@ function drawReactions(canvas: HTMLCanvasElement | null, game: Game, time: numbe
     const y = ((pulse.y + 0.5) / game.boardSize.height) * height
     const radius = Math.max(1, reach * progress)
     const glow = context.createRadialGradient(x, y, Math.max(0, radius - 70), x, y, radius)
-    glow.addColorStop(0, 'rgba(255, 79, 123, 0)')
-    glow.addColorStop(0.65, `rgba(255, 79, 123, ${0.13 * (1 - progress)})`)
-    glow.addColorStop(1, 'rgba(255, 79, 123, 0)')
+    glow.addColorStop(0, `rgba(${foodColor}, 0)`)
+    glow.addColorStop(0.65, `rgba(${foodColor}, ${0.13 * (1 - progress)})`)
+    glow.addColorStop(1, `rgba(${foodColor}, 0)`)
     context.fillStyle = glow
     context.fillRect(0, 0, width, height)
   }
@@ -415,6 +420,7 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
             y: bounds.top + ((game.food.y + 0.5) / game.boardSize.height) * bounds.height,
             reach: Math.hypot(bounds.width, bounds.height),
             createdAt: now,
+            isMidnight: game.score >= midnightScore,
           })
         }
         game.particles.push(...createFoodParticles(game.food, now))
@@ -461,6 +467,7 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
     highScoreLabelRef,
     isGameOver,
     isMobile,
+    isMidnight: score >= midnightScore && isSnakeVisible,
     isSnakeVisible,
     reopenSnake,
     restartGame,

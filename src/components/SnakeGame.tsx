@@ -3,11 +3,20 @@ import { useSnakeGame, type FoodPulse } from '../hooks/useSnakeGame'
 import { SnakeControlsHint } from './SnakeControlsHint'
 import { GameOverControls } from './GameOverControls'
 
-type SnakeGameProps = { gameStartDelay: number; isReady: boolean; onFoodEaten: (pulse: FoodPulse) => void }
+type SnakeGameProps = {
+  gameStartDelay: number
+  isReady: boolean
+  onFoodEaten: (pulse: FoodPulse) => void
+  onMidnightChange: (isMidnight: boolean) => void
+}
 
-export function SnakeGame({ gameStartDelay, isReady, onFoodEaten }: SnakeGameProps) {
+export function SnakeGame({ gameStartDelay, isReady, onFoodEaten, onMidnightChange }: SnakeGameProps) {
   const [isEntering, setIsEntering] = useState(false)
   const game = useSnakeGame(isReady, gameStartDelay, onFoodEaten)
+
+  useEffect(() => {
+    onMidnightChange(game.isMidnight)
+  }, [game.isMidnight, onMidnightChange])
 
   useEffect(() => {
     if (!isReady) return

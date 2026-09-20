@@ -10,6 +10,7 @@ function App() {
   const [showSocials, setShowSocials] = useState(false)
   const [showSnake, setShowSnake] = useState(false)
   const [foodPulse, setFoodPulse] = useState<FoodPulse | null>(null)
+  const [isMidnight, setIsMidnight] = useState(false)
 
   useEffect(() => {
     const socialTimer = window.setTimeout(() => setShowSocials(true), socialRevealAt)
@@ -22,11 +23,11 @@ function App() {
   }, [])
 
   return (
-    <main className="ambient-background flex min-h-svh flex-col items-center justify-start gap-8 px-8 pt-[25svh] pb-8">
+    <main className={`ambient-background ${isMidnight ? 'ambient-background--midnight' : ''} flex min-h-svh flex-col items-center justify-start gap-8 px-8 pt-[25svh] pb-8`}>
       <CustomCursor />
       <Hero foodPulse={foodPulse} />
       {showSocials && <SocialLinks />}
-      <SnakeGame isReady={showSnake} gameStartDelay={gameStartDelay} onFoodEaten={setFoodPulse} />
+      <SnakeGame isReady={showSnake} gameStartDelay={gameStartDelay} onFoodEaten={setFoodPulse} onMidnightChange={setIsMidnight} />
     </main>
   )
 }
