@@ -66,6 +66,21 @@ button {
   }
 }
 
+@keyframes title-idle-signal {
+  0%,
+  100% {
+    color: inherit;
+    filter: brightness(1);
+    text-shadow: none;
+  }
+
+  50% {
+    color: #ffffff;
+    filter: brightness(1.35);
+    text-shadow: 0 0 0.55em rgba(255, 255, 255, 0.45);
+  }
+}
+
 @keyframes board-flash {
   0%,
   100% {
@@ -131,6 +146,10 @@ button {
   animation: title-reveal 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+.title-idle-signal {
+  animation: title-idle-signal 850ms ease-in-out both;
+}
+
 .social-icon {
   position: relative;
   isolation: isolate;
@@ -164,6 +183,7 @@ button {
   }
 
   .title-reveal-character,
+  .title-idle-signal,
   .entrance-reveal,
   .snake-enter,
   .snake-game-over,

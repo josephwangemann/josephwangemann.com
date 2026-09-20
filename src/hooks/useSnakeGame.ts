@@ -238,7 +238,8 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number) {
       const { height, width } = board.getBoundingClientRect()
       if (!height || !width) return
 
-      const targetCellSize = width >= 1_000 ? 36 : 28
+      const screenScale = Math.min(width / 1_360, height / 800)
+      const targetCellSize = Math.max(28, Math.min(72, 36 * screenScale))
       const nextBoardSize = {
         width: Math.max(10, Math.round(width / targetCellSize)),
         height: Math.max(12, Math.round(height / targetCellSize)),
