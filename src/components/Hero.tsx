@@ -5,7 +5,7 @@ const salutation = 'Hi!'
 const introduction = 'Joseph Wangemann here.'
 const greeting = `${salutation} ${introduction}`
 const signalCandidates = [
-  ...salutation.split('').map((character, index) => `salutation-${index}`),
+  ...salutation.split('').map((_, index) => `salutation-${index}`),
   ...introduction
     .split('')
     .flatMap((character, index) => (character === ' ' ? [] : [`introduction-${index}`])),
