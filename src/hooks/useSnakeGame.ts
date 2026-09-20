@@ -6,6 +6,14 @@ const mobileMediaQuery = '(max-width: 767px)'
 type Position = { x: number; y: number }
 type Direction = { x: number; y: number }
 type BoardSize = { height: number; width: number }
+type Particle = {
+  createdAt: number
+  velocityX: number
+  velocityY: number
+  x: number
+  y: number
+}
+type TrailSegment = Position & { createdAt: number }
 type Game = {
   boardSize: BoardSize
   direction: Direction
@@ -13,7 +21,12 @@ type Game = {
   isOver: boolean
   score: number
   snake: Position[]
+  particles: Particle[]
+  trail: TrailSegment[]
 }
+
+const particleDuration = 480
+const trailDuration = 340
 
 const directions: Record<string, Direction> = {
   ArrowUp: { x: 0, y: -1 },
@@ -53,9 +66,26 @@ function createGame(boardSize: BoardSize): Game {
     direction: directions.ArrowRight,
     food: createFood(snake, boardSize),
     isOver: false,
+    particles: [],
     score: 0,
     snake,
+    trail: [],
   }
+}
+
+function createFoodParticles(food: Position, createdAt: number): Particle[] {
+  return Array.from({ length: 10 }, (_, index) => {
+    const angle = (index / 10) * Math.PI * 2 + Math.random() * 0.35
+    const speed = 0.0012 + Math.random() * 0.0014
+
+    return {
+      x: food.x + 0.5,
+      y: food.y + 0.5,
+      velocityX: Math.cos(angle) * speed,
+      velocityY: Math.sin(angle) * speed,
+      createdAt,
+    }
+  })
 }
 
 function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performance.now()) {
@@ -79,6 +109,25 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
     context.lineTo(game.boardSize.width, y)
     context.stroke()
   }
+
+  game.trail.forEach((segment) => {
+    const opacity = Math.max(0, 1 - (time - segment.createdAt) / trailDuration)
+    context.fillStyle = `rgba(116, 201, 0, ${opacity * 0.22})`
+    context.fillRect(segment.x + 0.2, segment.y + 0.2, 0.6, 0.6)
+  })
+
+  game.particles.forEach((particle) => {
+    const age = time - particle.createdAt
+    const opacity = Math.max(0, 1 - age / particleDuration)
+    const size = 0.08 + opacity * 0.08
+    context.fillStyle = `rgba(255, 112, 145, ${opacity})`
+    context.fillRect(
+      particle.x + particle.velocityX * age - size / 2,
+      particle.y + particle.velocityY * age - size / 2,
+      size,
+      size,
+    )
+  })
 
   context.fillStyle = '#ff4f7b'
   const foodSize = 0.58 + Math.sin(time / 150) * 0.22
@@ -189,7 +238,7 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number) {
       const { height, width } = board.getBoundingClientRect()
       if (!height || !width) return
 
-      const targetCellSize = width >= 1_000 ? 34 : 28
+      const targetCellSize = width >= 1_000 ? 36 : 28
       const nextBoardSize = {
         width: Math.max(10, Math.round(width / targetCellSize)),
         height: Math.max(12, Math.round(height / targetCellSize)),
@@ -245,6 +294,10 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number) {
       const game = gameRef.current
       if (game.isOver) return
 
+      const now = performance.now()
+      game.particles = game.particles.filter((particle) => now - particle.createdAt < particleDuration)
+      game.trail = game.trail.filter((segment) => now - segment.createdAt < trailDuration)
+
       const head = game.snake[0]
       const nextHead = { x: head.x + game.direction.x, y: head.y + game.direction.y }
       const eatsFood = positionsMatch(nextHead, game.food)
@@ -268,9 +321,11 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number) {
       if (eatsFood) {
         game.score += 1
         setHighScore((currentHighScore) => Math.max(currentHighScore, game.score))
+        game.particles.push(...createFoodParticles(game.food, now))
         game.food = createFood(game.snake, game.boardSize)
       } else {
-        game.snake.pop()
+        const tail = game.snake.pop()
+        if (tail) game.trail.push({ ...tail, createdAt: now })
       }
       renderGame()
     }
