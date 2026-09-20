@@ -21,6 +21,7 @@ type Game = {
   isOver: boolean
   score: number
   snake: Position[]
+  stoppedAt: number | null
   particles: Particle[]
   trail: TrailSegment[]
 }
@@ -69,6 +70,7 @@ function createGame(boardSize: BoardSize): Game {
     particles: [],
     score: 0,
     snake,
+    stoppedAt: null,
     trail: [],
   }
 }
@@ -92,6 +94,8 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
   const context = canvas?.getContext('2d')
   if (!canvas || !context) return
 
+  const animationTime = game.stoppedAt ?? time
+
   context.clearRect(0, 0, game.boardSize.width, game.boardSize.height)
   context.strokeStyle = 'rgba(112, 183, 245, 0.08)'
   context.lineWidth = 0.03
@@ -111,13 +115,13 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
   }
 
   game.trail.forEach((segment) => {
-    const opacity = Math.max(0, 1 - (time - segment.createdAt) / trailDuration)
+    const opacity = Math.max(0, 1 - (animationTime - segment.createdAt) / trailDuration)
     context.fillStyle = `rgba(116, 201, 0, ${opacity * 0.22})`
     context.fillRect(segment.x + 0.2, segment.y + 0.2, 0.6, 0.6)
   })
 
   game.particles.forEach((particle) => {
-    const age = time - particle.createdAt
+    const age = animationTime - particle.createdAt
     const opacity = Math.max(0, 1 - age / particleDuration)
     const size = 0.08 + opacity * 0.08
     context.fillStyle = `rgba(255, 112, 145, ${opacity})`
@@ -130,7 +134,7 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
   })
 
   context.fillStyle = '#ff4f7b'
-  const foodSize = 0.58 + Math.sin(time / 150) * 0.22
+  const foodSize = 0.58 + Math.sin(animationTime / 150) * 0.22
   context.fillRect(
     game.food.x + (1 - foodSize) / 2,
     game.food.y + (1 - foodSize) / 2,
@@ -312,6 +316,7 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number) {
 
       if (hitWall || hitSnake) {
         game.isOver = true
+        game.stoppedAt = now
         setIsGameOver(true)
         setGameOverAction('restart')
         renderGame()
