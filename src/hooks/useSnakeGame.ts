@@ -15,6 +15,8 @@ type Particle = {
   y: number
 }
 type TrailSegment = Position & { createdAt: number }
+type SnakePiece = { from: Position; to: Position; color: string; fromSize: number; toSize: number }
+type SnakeTransition = { kind: 'death' | 'restart'; startedAt: number; pieces: SnakePiece[] }
 export type FoodPulse = { x: number; y: number; reach: number; createdAt: number; isMidnight: boolean }
 type Game = {
   boardSize: BoardSize
@@ -28,11 +30,51 @@ type Game = {
   trail: TrailSegment[]
   foodPulses: (Position & { createdAt: number })[]
   recordAt: number | null
+  transition: SnakeTransition | null
 }
 
 const particleDuration = 480
 const trailDuration = 340
 const recordDuration = 1400
+const impactPause = 80
+const breakupDuration = 300
+const restartDuration = 280
+
+function snakeColor(isMidnight: boolean, isHead: boolean) {
+  return isMidnight ? (isHead ? '#d9fbff' : '#69e1f2') : (isHead ? '#d9ff7a' : '#74c900')
+}
+
+function samplePiece(piece: SnakePiece, transition: SnakeTransition, time: number) {
+  const delay = transition.kind === 'death' ? impactPause : 0
+  const duration = transition.kind === 'death' ? breakupDuration : restartDuration
+  const progress = Math.max(0, Math.min(1, (time - transition.startedAt - delay) / duration))
+  const eased = transition.kind === 'death' ? 1 - (1 - progress) ** 3 : progress * progress * (3 - 2 * progress)
+  return {
+    x: piece.from.x + (piece.to.x - piece.from.x) * eased,
+    y: piece.from.y + (piece.to.y - piece.from.y) * eased,
+    size: piece.fromSize + (piece.toSize - piece.fromSize) * eased,
+  }
+}
+
+function breakSnake(game: Game, now: number): SnakeTransition {
+  return {
+    kind: 'death',
+    startedAt: now,
+    pieces: game.snake.flatMap((segment, index) => Array.from({ length: 4 }, (_, corner) => {
+      const from = { x: segment.x + 0.31 + (corner % 2) * 0.38, y: segment.y + 0.31 + Math.floor(corner / 2) * 0.38 }
+      return {
+        from,
+        to: {
+          x: Math.max(0.2, Math.min(game.boardSize.width - 0.2, from.x + ((corner % 2) * 2 - 1) * (0.2 + Math.random() * 0.45))),
+          y: Math.max(0.2, Math.min(game.boardSize.height - 0.2, from.y + 0.25 + Math.random() * 0.65)),
+        },
+        color: snakeColor(game.score >= midnightScore, index === 0),
+        fromSize: 0.38,
+        toSize: 0.22,
+      }
+    })),
+  }
+}
 
 const directions: Record<string, Direction> = {
   ArrowUp: { x: 0, y: -1 },
@@ -79,6 +121,7 @@ function createGame(boardSize: BoardSize): Game {
     trail: [],
     foodPulses: [],
     recordAt: null,
+    transition: null,
   }
 }
 
@@ -150,10 +193,15 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
     foodSize,
   )
 
+  const transition = game.transition
+  const showPieces = transition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && (
+    transition.kind === 'death'
+      ? time >= transition.startedAt + impactPause
+      : time < transition.startedAt + restartDuration
+  )
+  if (showPieces) return
   game.snake.forEach((segment, index) => {
-    context.fillStyle = isMidnight
-      ? index === 0 ? '#d9fbff' : '#69e1f2'
-      : index === 0 ? '#d9ff7a' : '#74c900'
+    context.fillStyle = snakeColor(isMidnight, index === 0)
     context.fillRect(segment.x + 0.12, segment.y + 0.12, 0.76, 0.76)
   })
 }
@@ -171,6 +219,18 @@ function drawReactions(canvas: HTMLCanvasElement | null, game: Game, time: numbe
   context.setTransform(ratio, 0, 0, ratio, 0, 0)
   context.clearRect(0, 0, width, height)
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  const transition = game.transition
+  if (transition && (transition.kind === 'death'
+    ? time >= transition.startedAt + impactPause
+    : time < transition.startedAt + restartDuration)) {
+    const cellWidth = width / game.boardSize.width
+    const cellHeight = height / game.boardSize.height
+    for (const piece of transition.pieces) {
+      const position = samplePiece(piece, transition, time)
+      context.fillStyle = piece.color
+      context.fillRect((position.x - position.size / 2) * cellWidth, (position.y - position.size / 2) * cellHeight, position.size * cellWidth, position.size * cellHeight)
+    }
+  }
   const now = game.stoppedAt ?? time
   const reach = Math.hypot(width, height)
   const foodColor = game.score >= midnightScore ? '255, 205, 112' : '255, 79, 123'
@@ -227,7 +287,28 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
   const [showControlsHint, setShowControlsHint] = useState(true)
 
   const restartGame = () => {
-    gameRef.current = createGame(boardSize)
+    const previous = gameRef.current.transition
+    const next = createGame(boardSize)
+    const now = performance.now()
+    if (previous?.kind === 'death' && isSnakeVisible && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      next.transition = {
+        kind: 'restart',
+        startedAt: now,
+        pieces: previous.pieces.map((piece, index) => {
+          const position = samplePiece(piece, previous, now)
+          const segmentIndex = Math.floor(index / 4) % next.snake.length
+          const segment = next.snake[segmentIndex]
+          return {
+            from: { x: position.x, y: position.y },
+            to: { x: segment.x + 0.31 + (index % 2) * 0.38, y: segment.y + 0.31 + Math.floor(index % 4 / 2) * 0.38 },
+            color: snakeColor(false, segmentIndex === 0),
+            fromSize: position.size,
+            toSize: 0.38,
+          }
+        }),
+      }
+    }
+    gameRef.current = next
     setScore(0)
     setIsGameOver(false)
     setGameOverAction('restart')
@@ -379,6 +460,10 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
       if (game.isOver) return
 
       const now = performance.now()
+      if (game.transition?.kind === 'restart') {
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && now < game.transition.startedAt + restartDuration + 80) return
+        game.transition = null
+      }
       game.particles = game.particles.filter((particle) => now - particle.createdAt < particleDuration)
       game.trail = game.trail.filter((segment) => now - segment.createdAt < trailDuration)
       game.foodPulses = game.foodPulses.filter((pulse) => now - pulse.createdAt < 1100)
@@ -397,6 +482,7 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
       if (hitWall || hitSnake) {
         game.isOver = true
         game.stoppedAt = now
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) game.transition = breakSnake(game, now)
         setIsGameOver(true)
         setGameOverAction('restart')
         renderGame()
