@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSnakeGame, type FoodPulse } from '../hooks/useSnakeGame'
+import { useSnakeGame, type ColorMode, type FoodPulse } from '../hooks/useSnakeGame'
 import { SnakeControlsHint } from './SnakeControlsHint'
 import { GameOverControls } from './GameOverControls'
 
@@ -7,16 +7,16 @@ type SnakeGameProps = {
   gameStartDelay: number
   isReady: boolean
   onFoodEaten: (pulse: FoodPulse) => void
-  onMidnightChange: (isMidnight: boolean) => void
+  onColorModeChange: (mode: ColorMode) => void
 }
 
-export function SnakeGame({ gameStartDelay, isReady, onFoodEaten, onMidnightChange }: SnakeGameProps) {
+export function SnakeGame({ gameStartDelay, isReady, onFoodEaten, onColorModeChange }: SnakeGameProps) {
   const [isEntering, setIsEntering] = useState(false)
   const game = useSnakeGame(isReady, gameStartDelay, onFoodEaten)
 
   useEffect(() => {
-    onMidnightChange(game.isMidnight)
-  }, [game.isMidnight, onMidnightChange])
+    onColorModeChange(game.colorMode)
+  }, [game.colorMode, onColorModeChange])
 
   useEffect(() => {
     if (!isReady) return
@@ -48,7 +48,7 @@ export function SnakeGame({ gameStartDelay, isReady, onFoodEaten, onMidnightChan
       <div className="snake-stage absolute inset-5 z-0 md:inset-8">
         <div
           ref={game.boardRef}
-          className={`snake-board absolute inset-0 touch-none overflow-hidden rounded-2xl select-none ${isEntering ? 'snake-enter' : ''} ${game.isGameOver ? 'snake-game-over' : ''}`}
+          className={`snake-board absolute inset-0 touch-none overflow-hidden rounded-2xl select-none ${isEntering ? 'snake-enter' : ''} ${game.isGameOver ? 'snake-game-over' : ''} ${game.colorMode === 'aurora' ? 'snake-board--aurora' : ''} ${game.colorMode === 'dawn' ? 'snake-board--dawn' : ''}`}
           onTouchEnd={game.handleTouchEnd}
           onTouchStart={game.handleTouchStart}
         >
@@ -76,6 +76,7 @@ export function SnakeGame({ gameStartDelay, isReady, onFoodEaten, onMidnightChan
       {game.isGameOver && (
         <GameOverControls
           action={game.gameOverAction}
+          colorMode={game.colorMode}
           onHide={game.hideSnake}
           onRestart={game.restartGame}
         />

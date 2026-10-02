@@ -3,6 +3,23 @@ import { useEffect, useRef, useState, type TouchEvent } from 'react'
 const initialBoardSize = { height: 18, width: 28 }
 const mobileMediaQuery = '(max-width: 767px)'
 const midnightScore = 5
+const auroraScore = 10
+const dawnScore = 15
+
+export type ColorMode = 'dusk' | 'midnight' | 'aurora' | 'dawn'
+
+function colorModeForScore(score: number): ColorMode {
+  if (score >= dawnScore) return 'dawn'
+  if (score >= auroraScore) return 'aurora'
+  return score >= midnightScore ? 'midnight' : 'dusk'
+}
+
+const colors: Record<ColorMode, { head: string; body: string; trail: string; particles: string; food: string; pulse: string }> = {
+  dusk: { head: '#d9ff7a', body: '#74c900', trail: '116, 201, 0', particles: '255, 112, 145', food: '#ff4f7b', pulse: '255, 79, 123' },
+  midnight: { head: '#d9fbff', body: '#69e1f2', trail: '105, 225, 242', particles: '255, 205, 112', food: '#ffcd70', pulse: '255, 205, 112' },
+  aurora: { head: '#e8fff7', body: '#77e9c7', trail: '119, 233, 199', particles: '211, 156, 255', food: '#d39cff', pulse: '211, 156, 255' },
+  dawn: { head: '#fff8da', body: '#ffc27d', trail: '255, 194, 125', particles: '255, 125, 151', food: '#ff7d97', pulse: '255, 173, 115' },
+}
 
 type Position = { x: number; y: number }
 type Direction = { x: number; y: number }
@@ -15,9 +32,10 @@ type Particle = {
   y: number
 }
 type TrailSegment = Position & { createdAt: number }
+type FoodWave = Position & { createdAt: number; mode: ColorMode; milestone: boolean }
 type SnakePiece = { from: Position; to: Position; color: string; fromSize: number; toSize: number }
 type SnakeTransition = { kind: 'death' | 'restart'; startedAt: number; pieces: SnakePiece[] }
-export type FoodPulse = { x: number; y: number; reach: number; createdAt: number; isMidnight: boolean }
+export type FoodPulse = { x: number; y: number; reach: number; createdAt: number; mode: ColorMode; milestone: boolean }
 type Game = {
   boardSize: BoardSize
   direction: Direction
@@ -28,7 +46,7 @@ type Game = {
   stoppedAt: number | null
   particles: Particle[]
   trail: TrailSegment[]
-  foodPulses: (Position & { createdAt: number })[]
+  foodPulses: FoodWave[]
   recordAt: number | null
   transition: SnakeTransition | null
 }
@@ -40,8 +58,14 @@ const impactPause = 80
 const breakupDuration = 300
 const restartDuration = 280
 
-function snakeColor(isMidnight: boolean, isHead: boolean) {
-  return isMidnight ? (isHead ? '#d9fbff' : '#69e1f2') : (isHead ? '#d9ff7a' : '#74c900')
+function foodWaveDuration(pulse: FoodWave) {
+  return pulse.milestone ? (pulse.mode === 'dawn' ? 1900 : 1400) : 1100
+}
+
+function snakeColor(mode: ColorMode, isHead: boolean, index = 0) {
+  if (isHead) return colors[mode].head
+  if (mode === 'dawn') return `hsl(${39 - Math.min(index, 18) * 1.5} 100% ${74 - Math.min(index, 18) * 0.5}%)`
+  return colors[mode].body
 }
 
 function samplePiece(piece: SnakePiece, transition: SnakeTransition, time: number) {
@@ -68,7 +92,7 @@ function breakSnake(game: Game, now: number): SnakeTransition {
           x: Math.max(0.2, Math.min(game.boardSize.width - 0.2, from.x + ((corner % 2) * 2 - 1) * (0.2 + Math.random() * 0.45))),
           y: Math.max(0.2, Math.min(game.boardSize.height - 0.2, from.y + 0.25 + Math.random() * 0.65)),
         },
-        color: snakeColor(game.score >= midnightScore, index === 0),
+        color: snakeColor(colorModeForScore(game.score), index === 0, index),
         fromSize: 0.38,
         toSize: 0.22,
       }
@@ -125,9 +149,9 @@ function createGame(boardSize: BoardSize): Game {
   }
 }
 
-function createFoodParticles(food: Position, createdAt: number): Particle[] {
-  return Array.from({ length: 10 }, (_, index) => {
-    const angle = (index / 10) * Math.PI * 2 + Math.random() * 0.35
+function createFoodParticles(food: Position, createdAt: number, count = 10): Particle[] {
+  return Array.from({ length: count }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2 + Math.random() * 0.35
     const speed = 0.0012 + Math.random() * 0.0014
 
     return {
@@ -145,7 +169,8 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
   if (!canvas || !context) return
 
   const animationTime = game.stoppedAt ?? time
-  const isMidnight = game.score >= midnightScore
+  const mode = colorModeForScore(game.score)
+  const palette = colors[mode]
 
   context.clearRect(0, 0, game.boardSize.width, game.boardSize.height)
   context.strokeStyle = 'rgba(112, 183, 245, 0.08)'
@@ -167,7 +192,7 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
 
   game.trail.forEach((segment) => {
     const opacity = Math.max(0, 1 - (animationTime - segment.createdAt) / trailDuration)
-    context.fillStyle = `rgba(${isMidnight ? '105, 225, 242' : '116, 201, 0'}, ${opacity * 0.22})`
+    context.fillStyle = `rgba(${palette.trail}, ${opacity * 0.22})`
     context.fillRect(segment.x + 0.2, segment.y + 0.2, 0.6, 0.6)
   })
 
@@ -175,7 +200,7 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
     const age = animationTime - particle.createdAt
     const opacity = Math.max(0, 1 - age / particleDuration)
     const size = 0.08 + opacity * 0.08
-    context.fillStyle = `rgba(${isMidnight ? '255, 205, 112' : '255, 112, 145'}, ${opacity})`
+    context.fillStyle = `rgba(${palette.particles}, ${opacity})`
     context.fillRect(
       particle.x + particle.velocityX * age - size / 2,
       particle.y + particle.velocityY * age - size / 2,
@@ -184,7 +209,7 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
     )
   })
 
-  context.fillStyle = isMidnight ? '#ffcd70' : '#ff4f7b'
+  context.fillStyle = palette.food
   const foodSize = 0.58 + Math.sin(animationTime / 150) * 0.22
   context.fillRect(
     game.food.x + (1 - foodSize) / 2,
@@ -201,7 +226,7 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
   )
   if (showPieces) return
   game.snake.forEach((segment, index) => {
-    context.fillStyle = snakeColor(isMidnight, index === 0)
+    context.fillStyle = snakeColor(mode, index === 0, index)
     context.fillRect(segment.x + 0.12, segment.y + 0.12, 0.76, 0.76)
   })
 }
@@ -233,18 +258,17 @@ function drawReactions(canvas: HTMLCanvasElement | null, game: Game, time: numbe
   }
   const now = game.stoppedAt ?? time
   const reach = Math.hypot(width, height)
-  const foodColor = game.score >= midnightScore ? '255, 205, 112' : '255, 79, 123'
-
   for (const pulse of game.foodPulses) {
-    const progress = (now - pulse.createdAt) / 1100
+    const progress = (now - pulse.createdAt) / foodWaveDuration(pulse)
     if (progress < 0 || progress >= 1) continue
     const x = ((pulse.x + 0.5) / game.boardSize.width) * width
     const y = ((pulse.y + 0.5) / game.boardSize.height) * height
     const radius = Math.max(1, reach * progress)
-    const glow = context.createRadialGradient(x, y, Math.max(0, radius - 70), x, y, radius)
-    glow.addColorStop(0, `rgba(${foodColor}, 0)`)
-    glow.addColorStop(0.65, `rgba(${foodColor}, ${0.13 * (1 - progress)})`)
-    glow.addColorStop(1, `rgba(${foodColor}, 0)`)
+    const glow = context.createRadialGradient(x, y, Math.max(0, radius - (pulse.milestone ? 150 : 70)), x, y, radius)
+    const pulseColor = colors[pulse.mode].pulse
+    glow.addColorStop(0, `rgba(${pulseColor}, 0)`)
+    glow.addColorStop(0.65, `rgba(${pulseColor}, ${(pulse.mode === 'dawn' && pulse.milestone ? 0.36 : pulse.milestone ? 0.22 : 0.13) * (1 - progress)})`)
+    glow.addColorStop(1, `rgba(${pulseColor}, 0)`)
     context.fillStyle = glow
     context.fillRect(0, 0, width, height)
   }
@@ -277,6 +301,8 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
   const gameRef = useRef<Game>(createGame(initialBoardSize))
   const gameStartAtRef = useRef(performance.now() + gameStartDelay)
   const touchStartRef = useRef<Position | null>(null)
+  const previewAppliedRef = useRef(false)
+  const previewPauseUntilRef = useRef(0)
   const [boardSize, setBoardSize] = useState<BoardSize>(initialBoardSize)
   const [gameOverAction, setGameOverAction] = useState<'restart' | 'hide'>('restart')
   const [highScore, setHighScore] = useState(0)
@@ -301,7 +327,7 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
           return {
             from: { x: position.x, y: position.y },
             to: { x: segment.x + 0.31 + (index % 2) * 0.38, y: segment.y + 0.31 + Math.floor(index % 4 / 2) * 0.38 },
-            color: snakeColor(false, segmentIndex === 0),
+            color: snakeColor('dusk', segmentIndex === 0, segmentIndex),
             fromSize: position.size,
             toSize: 0.38,
           }
@@ -416,6 +442,38 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
   }, [boardSize])
 
   useEffect(() => {
+    if (!import.meta.env.DEV || !isReady || !isSnakeVisible || previewAppliedRef.current) return
+    const previewScore = Number(new URLSearchParams(window.location.search).get('color-preview'))
+    if (previewScore !== auroraScore && previewScore !== dawnScore) return
+
+    const timer = window.setTimeout(() => {
+      previewAppliedRef.current = true
+      const game = gameRef.current
+      const now = performance.now()
+      const mode = colorModeForScore(previewScore)
+      game.score = previewScore
+      highScoreRef.current = previewScore
+      setScore(previewScore)
+      setHighScore(previewScore)
+      previewPauseUntilRef.current = now + 4_000
+      game.foodPulses.push({ ...game.food, createdAt: now, mode, milestone: true })
+      game.particles.push(...createFoodParticles(game.food, now, mode === 'dawn' ? 32 : 10))
+      const bounds = canvasRef.current?.getBoundingClientRect()
+      if (bounds) {
+        onFoodEaten({
+          x: bounds.left + ((game.food.x + 0.5) / game.boardSize.width) * bounds.width,
+          y: bounds.top + ((game.food.y + 0.5) / game.boardSize.height) * bounds.height,
+          reach: Math.hypot(bounds.width, bounds.height),
+          createdAt: now,
+          mode,
+          milestone: true,
+        })
+      }
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [boardSize, isReady, isSnakeVisible, onFoodEaten])
+
+  useEffect(() => {
     if (!isReady || !isSnakeVisible) return
 
     const renderGame = (time = performance.now()) => {
@@ -460,13 +518,14 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
       if (game.isOver) return
 
       const now = performance.now()
+      if (now < previewPauseUntilRef.current) return
       if (game.transition?.kind === 'restart') {
         if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && now < game.transition.startedAt + restartDuration + 80) return
         game.transition = null
       }
       game.particles = game.particles.filter((particle) => now - particle.createdAt < particleDuration)
       game.trail = game.trail.filter((segment) => now - segment.createdAt < trailDuration)
-      game.foodPulses = game.foodPulses.filter((pulse) => now - pulse.createdAt < 1100)
+      game.foodPulses = game.foodPulses.filter((pulse) => now - pulse.createdAt < foodWaveDuration(pulse))
 
       const head = game.snake[0]
       const nextHead = { x: head.x + game.direction.x, y: head.y + game.direction.y }
@@ -493,12 +552,14 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
       if (eatsFood) {
         game.score += 1
         setScore(game.score)
+        const mode = colorModeForScore(game.score)
+        const milestone = game.score === auroraScore || game.score === dawnScore
         if (game.score > highScoreRef.current) {
           if (game.recordAt === null) game.recordAt = now
           highScoreRef.current = game.score
           setHighScore(game.score)
         }
-        game.foodPulses.push({ ...game.food, createdAt: now })
+        game.foodPulses.push({ ...game.food, createdAt: now, mode, milestone })
         const bounds = canvasRef.current?.getBoundingClientRect()
         if (bounds) {
           onFoodEaten({
@@ -506,10 +567,11 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
             y: bounds.top + ((game.food.y + 0.5) / game.boardSize.height) * bounds.height,
             reach: Math.hypot(bounds.width, bounds.height),
             createdAt: now,
-            isMidnight: game.score >= midnightScore,
+            mode,
+            milestone,
           })
         }
-        game.particles.push(...createFoodParticles(game.food, now))
+        game.particles.push(...createFoodParticles(game.food, now, game.score === dawnScore ? 32 : 10))
         game.food = createFood(game.snake, game.boardSize)
       } else {
         const tail = game.snake.pop()
@@ -553,7 +615,7 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
     highScoreLabelRef,
     isGameOver,
     isMobile,
-    isMidnight: score >= midnightScore && isSnakeVisible,
+    colorMode: isSnakeVisible ? colorModeForScore(score) : 'dusk',
     isSnakeVisible,
     reopenSnake,
     restartGame,

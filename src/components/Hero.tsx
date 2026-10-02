@@ -24,19 +24,26 @@ export function Hero({ foodPulse }: { foodPulse: FoodPulse | null }) {
     titleRef.current?.querySelectorAll<HTMLElement>('.title-reveal-character').forEach((letter) => {
       const bounds = letter.getBoundingClientRect()
       const distance = Math.hypot(bounds.left + bounds.width / 2 - foodPulse.x, bounds.top + bounds.height / 2 - foodPulse.y)
-      const strength = Math.max(0, 1 - distance / 360)
+      const strength = Math.max(0, 1 - distance / (foodPulse.milestone ? foodPulse.reach : 360))
       if (!strength) return
-      animations.push(letter.animate([
-        { color: '#f5f5f5', textShadow: '0 0 0 transparent' },
-        {
-          color: foodPulse.isMidnight
+      const glowColor = foodPulse.mode === 'aurora' ? '211, 156, 255' : foodPulse.mode === 'dawn' ? '255, 173, 115' : foodPulse.mode === 'midnight' ? '255, 205, 112' : '255, 79, 123'
+      const litColor = foodPulse.mode === 'aurora'
+        ? `rgb(${245 - 60 * strength}, 255, ${245 - 10 * strength})`
+        : foodPulse.mode === 'dawn'
+          ? `rgb(255, ${245 - 35 * strength}, ${245 - 95 * strength})`
+          : foodPulse.mode === 'midnight'
             ? `rgb(255, ${245 - 40 * strength}, ${245 - 133 * strength})`
-            : `rgb(255, ${245 - 100 * strength}, ${245 - 70 * strength})`,
-          textShadow: `0 0 0.45em rgba(${foodPulse.isMidnight ? '255, 205, 112' : '255, 79, 123'}, ${strength * 0.65})`,
+            : `rgb(255, ${245 - 100 * strength}, ${245 - 70 * strength})`
+      const baseColor = foodPulse.mode === 'dawn' ? '#fff4df' : '#f5f5f5'
+      animations.push(letter.animate([
+        { color: baseColor, textShadow: '0 0 0 transparent' },
+        {
+          color: litColor,
+          textShadow: `0 0 ${foodPulse.mode === 'dawn' && foodPulse.milestone ? '0.8em' : '0.45em'} rgba(${glowColor}, ${strength * (foodPulse.milestone ? 0.9 : 0.65)})`,
           offset: 0.35,
         },
-        { color: '#f5f5f5', textShadow: '0 0 0 transparent' },
-      ], { duration: 550, delay: Math.max(0, distance / foodPulse.reach * 1100 - (performance.now() - foodPulse.createdAt)), easing: 'ease-out' }))
+        { color: baseColor, textShadow: '0 0 0 transparent' },
+      ], { duration: foodPulse.milestone ? 900 : 550, delay: Math.max(0, distance / foodPulse.reach * 1100 - (performance.now() - foodPulse.createdAt)), easing: 'ease-out' }))
     })
     return () => animations.forEach((animation) => animation.cancel())
   }, [foodPulse])
