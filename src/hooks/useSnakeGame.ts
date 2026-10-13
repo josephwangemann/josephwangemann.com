@@ -5,6 +5,16 @@ const mobileMediaQuery = '(max-width: 767px)'
 const midnightScore = 5
 const auroraScore = 10
 const dawnScore = 15
+const highScoreStorageKey = 'snake-personal-high-score'
+
+function readHighScore(): number {
+  try {
+    const score = Number(window.localStorage.getItem(highScoreStorageKey))
+    return Number.isSafeInteger(score) && score >= 0 ? score : 0
+  } catch {
+    return 0
+  }
+}
 
 export type ColorMode = 'dusk' | 'midnight' | 'aurora' | 'dawn'
 
@@ -48,12 +58,15 @@ type Game = {
   trail: TrailSegment[]
   foodPulses: FoodWave[]
   recordAt: number | null
+  celebration: { score: number; createdAt: number } | null
   transition: SnakeTransition | null
 }
 
 const particleDuration = 480
 const trailDuration = 340
 const recordDuration = 1400
+const celebrationDuration = 900
+const celebrationColors = ['#ffc27d', '#77e9c7', '#70b7f5', '#d39cff', '#ff7d97']
 const impactPause = 80
 const breakupDuration = 300
 const restartDuration = 280
@@ -145,6 +158,7 @@ function createGame(boardSize: BoardSize): Game {
     trail: [],
     foodPulses: [],
     recordAt: null,
+    celebration: null,
     transition: null,
   }
 }
@@ -231,6 +245,37 @@ function drawGame(canvas: HTMLCanvasElement | null, game: Game, time = performan
   })
 }
 
+function drawCelebration(context: CanvasRenderingContext2D, game: Game, time: number, width: number, height: number, reducedMotion: boolean) {
+  const celebration = game.celebration
+  if (!celebration || width <= 4 || height <= 4) return
+  const progress = ((game.stoppedAt ?? time) - celebration.createdAt) / celebrationDuration
+  if (progress < 0 || progress >= 1) return
+  const color = celebration.score === 50 ? '#ffc27d' : celebrationColors[(celebration.score / 100 - 1) % celebrationColors.length]
+  const radius = Math.min(14, (width - 4) / 2, (height - 4) / 2)
+  const perimeter = 2 * (width + height - 8) - 8 * radius + 2 * Math.PI * radius
+  context.save()
+  context.strokeStyle = color
+  context.fillStyle = color
+  context.lineWidth = celebration.score === 50 ? 2 : 3
+  context.globalAlpha = reducedMotion ? 0.7 : Math.sin(Math.PI * progress)
+  if (!reducedMotion) {
+    context.shadowColor = color
+    context.shadowBlur = 12
+    context.setLineDash([perimeter * 0.22, perimeter * 0.78])
+    context.lineDashOffset = -perimeter * progress
+  }
+  context.beginPath()
+  context.roundRect(2, 2, width - 4, height - 4, radius)
+  context.stroke()
+  if (celebration.score >= 100) {
+    context.font = `${Math.min(24, Math.max(12, width / 20))}px "Press Start 2P", monospace`
+    context.textAlign = 'right'
+    context.textBaseline = 'top'
+    context.fillText(`${celebration.score}!`, width - 20, 20, width - 40)
+  }
+  context.restore()
+}
+
 function drawReactions(canvas: HTMLCanvasElement | null, game: Game, time: number) {
   const context = canvas?.getContext('2d')
   if (!canvas || !context) return
@@ -243,7 +288,9 @@ function drawReactions(canvas: HTMLCanvasElement | null, game: Game, time: numbe
   }
   context.setTransform(ratio, 0, 0, ratio, 0, 0)
   context.clearRect(0, 0, width, height)
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  drawCelebration(context, game, time, width, height, reducedMotion)
+  if (reducedMotion) return
   const transition = game.transition
   if (transition && (transition.kind === 'death'
     ? time >= transition.startedAt + impactPause
@@ -293,9 +340,10 @@ function drawReactions(canvas: HTMLCanvasElement | null, game: Game, time: numbe
 }
 
 export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEaten: (pulse: FoodPulse) => void) {
+  const [highScore, setHighScore] = useState(readHighScore)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const reactionsRef = useRef<HTMLCanvasElement>(null)
-  const highScoreRef = useRef(0)
+  const highScoreRef = useRef(highScore)
   const highScoreLabelRef = useRef<HTMLSpanElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
   const gameRef = useRef<Game>(createGame(initialBoardSize))
@@ -305,7 +353,6 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
   const previewPauseUntilRef = useRef(0)
   const [boardSize, setBoardSize] = useState<BoardSize>(initialBoardSize)
   const [gameOverAction, setGameOverAction] = useState<'restart' | 'hide'>('restart')
-  const [highScore, setHighScore] = useState(0)
   const [score, setScore] = useState(0)
   const [isGameOver, setIsGameOver] = useState(false)
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(mobileMediaQuery).matches)
@@ -491,6 +538,10 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
       }
     }
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLElement) {
+        if (event.target.closest('form, input, textarea, select, [contenteditable="true"]')) return
+        if (event.key === 'Enter' && event.target.closest('button')) return
+      }
       if (gameRef.current.isOver) {
         if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
           event.preventDefault()
@@ -552,12 +603,22 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
       if (eatsFood) {
         game.score += 1
         setScore(game.score)
+        if (game.score === 50 || game.score % 100 === 0) {
+          game.celebration = { score: game.score, createdAt: now }
+        }
         const mode = colorModeForScore(game.score)
         const milestone = game.score === auroraScore || game.score === dawnScore
         if (game.score > highScoreRef.current) {
           if (game.recordAt === null) game.recordAt = now
           highScoreRef.current = game.score
           setHighScore(game.score)
+          if (!previewAppliedRef.current) {
+            try {
+              window.localStorage.setItem(highScoreStorageKey, String(Math.max(game.score, readHighScore())))
+            } catch {
+              // Keep the in-memory high score when browser storage is unavailable.
+            }
+          }
         }
         game.foodPulses.push({ ...game.food, createdAt: now, mode, milestone })
         const bounds = canvasRef.current?.getBoundingClientRect()

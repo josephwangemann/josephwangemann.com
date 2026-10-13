@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /snakeScores/{runId} {
+      allow list: if request.query.limit != null && request.query.limit <= 5;
+      allow get: if request.auth != null;
+      function validScore() {
+        let data = request.resource.data;
+        return request.auth != null && request.auth.uid == data.userId
+          && data.keys().hasAll(['initials', 'score', 'userId', 'updatedAt'])
+          && data.keys().hasOnly(['initials', 'score', 'userId', 'updatedAt'])
+          && data.initials is string && data.initials.matches('^[A-Z]{3}$')
+          && !(data.initials in ['ASS', 'FCK', 'SHT', 'SEX'])
+          && data.score is int && data.score > 0
+          && data.updatedAt == request.time;
+      }
+      allow create: if validScore();
+      allow update, delete: if false;
+    }
+  }
+}

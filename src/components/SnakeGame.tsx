@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSnakeGame, type ColorMode, type FoodPulse } from '../hooks/useSnakeGame'
 import { SnakeControlsHint } from './SnakeControlsHint'
 import { GameOverControls } from './GameOverControls'
+import { SnakeLeaderboard } from './SnakeLeaderboard'
 
 type SnakeGameProps = {
   gameStartDelay: number
@@ -74,12 +75,15 @@ export function SnakeGame({ gameStartDelay, isReady, onFoodEaten, onColorModeCha
         </div>
       </div>
       {game.isGameOver && (
-        <GameOverControls
-          action={game.gameOverAction}
-          colorMode={game.colorMode}
-          onHide={game.hideSnake}
-          onRestart={game.restartGame}
-        />
+        <div className="relative z-10 flex flex-col items-center gap-5">
+          <GameOverControls
+            action={game.gameOverAction}
+            colorMode={game.colorMode}
+            onHide={game.hideSnake}
+            onRestart={game.restartGame}
+          />
+          <SnakeLeaderboard score={game.score} />
+        </div>
       )}
     </>
   )
