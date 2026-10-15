@@ -346,6 +346,7 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
   const highScoreRef = useRef(highScore)
   const highScoreLabelRef = useRef<HTMLSpanElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
+  const boardInitializedRef = useRef(false)
   const gameRef = useRef<Game>(createGame(initialBoardSize))
   const gameStartAtRef = useRef(performance.now() + gameStartDelay)
   const touchStartRef = useRef<Position | null>(null)
@@ -468,6 +469,11 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
         height: Math.max(12, Math.round(height / targetCellSize)),
       }
 
+      if (!boardInitializedRef.current) {
+        gameRef.current = createGame(nextBoardSize)
+        boardInitializedRef.current = true
+      }
+
       setBoardSize((currentBoardSize) =>
         currentBoardSize.width === nextBoardSize.width && currentBoardSize.height === nextBoardSize.height
           ? currentBoardSize
@@ -482,10 +488,13 @@ export function useSnakeGame(isReady: boolean, gameStartDelay: number, onFoodEat
   }, [isReady, isSnakeVisible])
 
   useEffect(() => {
-    gameRef.current = createGame(boardSize)
-    setScore(0)
-    setIsGameOver(false)
-    drawGame(canvasRef.current, gameRef.current)
+    // Resizing must not start a new run or dismiss the game-over controls.
+    const game = gameRef.current
+    game.boardSize = boardSize
+    if (game.food.x >= boardSize.width || game.food.y >= boardSize.height) {
+      game.food = createFood(game.snake, boardSize)
+    }
+    drawGame(canvasRef.current, game)
   }, [boardSize])
 
   useEffect(() => {
