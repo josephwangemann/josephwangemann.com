@@ -5,6 +5,11 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    rolldownOptions: {
+      input: ['index.html', '404.html'],
+    },
+  },
   plugins: [
     tailwindcss(),
     react(),

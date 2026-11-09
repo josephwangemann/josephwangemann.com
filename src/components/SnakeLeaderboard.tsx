@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { LeaderboardEntry } from '../lib/leaderboard'
 
+let rememberedInitials = ''
+
 export function SnakeLeaderboard({ score }: { score: number }) {
   const [runId] = useState(() => crypto.randomUUID())
   const [entries, setEntries] = useState<LeaderboardEntry[] | null>(null)
-  const [initials, setInitials] = useState('')
+  const [initials, setInitials] = useState(() => rememberedInitials)
   const [message, setMessage] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isDone, setIsDone] = useState(false)
+  const [savedEntryId, setSavedEntryId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -26,11 +29,15 @@ export function SnakeLeaderboard({ score }: { score: number }) {
 
   return (
     <section aria-label="Snake leaderboard" className="relative z-10 w-64 max-w-full rounded-xl border border-white/25 bg-[#07090d]/90 p-4 font-['Press_Start_2P',monospace] text-[0.55rem] leading-relaxed text-neutral-400">
-      {entries.length > 0 && <h2 className="mb-3 text-center text-neutral-200">Top 5</h2>}
+      {entries.length > 0 && <h2 className="mb-3 text-center text-neutral-200">Hall of Fame</h2>}
       {entries.length > 0 && (
         <ol className="space-y-2">
           {entries.map((entry, index) => (
-            <li key={entry.id} className="flex gap-4"><span>{index + 1}.</span><span className="text-neutral-200">{entry.initials}</span><span className="ml-auto tabular-nums text-neutral-200">{entry.score}</span></li>
+            <li key={entry.id} className={`flex gap-4 ${entry.id === savedEntryId ? '-mx-2 rounded bg-[#70b7f5]/10 px-2 ring-1 ring-inset ring-[#70b7f5]/30' : ''}`}>
+              <span>{index + 1}.</span>
+              <span className="text-neutral-200">{entry.initials}</span>
+              <span className="ml-auto tabular-nums text-neutral-200">{entry.score}</span>
+            </li>
           ))}
         </ol>
       )}
@@ -45,7 +52,9 @@ export function SnakeLeaderboard({ score }: { score: number }) {
           try {
             const service = await import('../lib/leaderboard')
             const result = await service.saveScore(initials, score, runId)
+            rememberedInitials = initials
             setEntries(result)
+            setSavedEntryId(runId)
             setIsDone(true)
             setMessage('Score saved!')
           } catch (error) {
